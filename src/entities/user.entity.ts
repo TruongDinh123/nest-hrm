@@ -1,7 +1,15 @@
 import { Exclude } from 'class-transformer';
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 @Entity()
+@Index(['id', 'email'])
 class User {
   @PrimaryGeneratedColumn()
   public id: number;
@@ -21,6 +29,18 @@ class User {
   })
   @Exclude()
   public currentHashedRefreshToken?: string;
+
+  @CreateDateColumn({
+    name: 'created_date',
+    type: 'timestamp without time zone',
+  })
+  createdAt: Date;
+
+  @UpdateDateColumn({
+    name: 'modified_date',
+    type: 'timestamp without time zone',
+  })
+  updatedAt: Date;
 }
 
 export default User;

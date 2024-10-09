@@ -6,7 +6,7 @@ services:
       - '5433:5432'
     volumes:
       - type: bind
-        source: ./db
+        source: E:/nest-hrm/db
         target: /var/lib/postgresql/data
     env_file:
       - docker.env

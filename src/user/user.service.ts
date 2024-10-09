@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import CreateUserDto from './user.dto';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
+import * as cookie from 'cookie';
 
 @Injectable()
 export class UsersService {
@@ -27,6 +28,45 @@ export class UsersService {
       'User with this email does not exist',
       HttpStatus.NOT_FOUND,
     );
+  }
+
+  async getAllUsers(lastId: number, lastCreatedAt: string, limit: number) {
+    console.log('Fetching users with:', { lastId, lastCreatedAt, limit });
+
+    const query = this.usersRepository
+      .createQueryBuilder('user')
+      .where('(user.created_date > :lastCreatedAt)', { lastCreatedAt })
+      .orWhere('(user.created_date = :lastCreatedAt AND user.id > :lastId)', {
+        lastCreatedAt,
+        lastId,
+      })
+      .orderBy('user.created_date', 'ASC')
+      .addOrderBy('user.id', 'ASC')
+      .take(limit);
+
+    console.log('Generated SQL:', query.getSql());
+    console.log('Parameters:', query.getParameters());
+
+    const results = await query.getMany();
+
+    console.log(`Found ${results.length} users`);
+    if (results.length > 0) {
+      console.log('First user:', results[0]);
+      console.log('Last user:', results[results.length - 1]);
+    }
+
+    const nextKey =
+      results.length > 0
+        ? {
+            id: results[results.length - 1].id,
+            createdAt: results[results.length - 1].createdAt,
+          }
+        : null;
+
+    return {
+      results,
+      nextKey,
+    };
   }
 
   async getById(userId: number) {
@@ -87,6 +127,34 @@ export class UsersService {
     if (isRefreshTokenMatching) {
       return user;
     }
+  }
+
+  async logOut(user: User) {
+    await this.usersRepository.update(user.id, {
+      currentHashedRefreshToken: null,
+    });
+    const accessCookie = cookie.serialize(
+      this.configService.get('ACCESS_COOKIE_NAME'),
+      '',
+      {
+        maxAge: 0,
+        path: '/',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+      },
+    );
+    const refreshCookie = cookie.serialize(
+      this.configService.get('REFRESH_COOKIE_NAME'),
+      '',
+      {
+        maxAge: 0,
+        path: '/',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+      },
+    );
+
+    return { refreshCookie, accessCookie };
   }
 }
 
