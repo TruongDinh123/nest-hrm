@@ -2,18 +2,26 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import User from '../entities/user.entity';
 import { UsersService } from './user.service';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UserController } from './user.controller';
-import { JwtStrategy } from 'src/authentication/jwt.strategy';
-import { JwtModule } from '@nestjs/jwt';
+import { CacheModule } from '@nestjs/cache-manager';
+import { redisStore } from 'cache-manager-redis-yet';
 
 @Module({
   imports: [
     ConfigModule,
-    JwtModule.register({}),
     TypeOrmModule.forFeature([User]),
+    CacheModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        store: redisStore,
+        host: configService.get('REDIS_HOST'),
+        port: configService.get('REDIS_PORT'),
+      }),
+    }),
   ],
-  providers: [UsersService, JwtStrategy],
+  providers: [UsersService],
   controllers: [UserController],
   exports: [UsersService],
 })

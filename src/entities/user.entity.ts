@@ -23,15 +23,18 @@ class User {
   @Column()
   public name: string;
 
-  @Column()
+  @Column({ nullable: true })
   @Exclude()
-  public password: string;
+  public password: string | null;
 
   @Column({
     nullable: true,
   })
   @Exclude()
   public currentHashedRefreshToken?: string;
+
+  @Column({ default: true })
+  public isActive: boolean;
 
   @Column({ default: false })
   public isRegisteredWithGoogle: boolean;

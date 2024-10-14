@@ -1,17 +1,21 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import User from '../entities/user.entity';
-import { Repository, SelectQueryBuilder } from 'typeorm';
-import CreateUserDto from './user.dto';
+import { Repository } from 'typeorm';
+import CreateUserDto from './dto/user.dto';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
-import { GetAllUsersParams } from './pagination.dto';
+import { UpdateUserDto } from './dto/updateUser.dto';
+import { Cache } from 'cache-manager';
+import { GetUsersQueryDto } from './dto/pagination.dto';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly configService: ConfigService,
   ) {}
 
@@ -19,6 +23,7 @@ export class UsersService {
     const user = await this.usersRepository.findOne({
       where: {
         email: email,
+        isActive: true,
       },
     });
     if (user) {
@@ -40,27 +45,67 @@ export class UsersService {
     return newUser;
   }
 
-  async getAllUsers(params: GetAllUsersParams) {
-    const { lastId, lastCreatedAt, limit, offset, searchTerm } = params;
-    const queryBuilder = this.createBaseQueryBuilder(searchTerm);
-    const totalCount = await queryBuilder.getCount();
+  // async getAllUsers() {
+  //   const cacheKey = 'all_users';
+  //   const cachedUsers = await this.cacheManager.get<User[]>(cacheKey);
 
-    if (offset !== undefined) {
-      return this.getOffsetBasedPagination(
-        queryBuilder,
-        offset,
-        limit,
-        totalCount,
-      );
+  //   if (cachedUsers) {
+  //     return cachedUsers;
+  //   }
+
+  //   const users = await this.usersRepository.find({
+  //     select: ['id', 'email', 'name'],
+  //   });
+
+  //   await this.cacheManager.set(cacheKey, users, 3600000);
+
+  //   return users;
+  // }
+
+  private generateUserCacheKey(
+    search?: string,
+    page?: number,
+    limit?: number,
+  ): string {
+    return `users_${search || 'all'}_${page || 1}_${limit || 10}`;
+  }
+
+  async getAllUsers(query: GetUsersQueryDto) {
+    const { search, page = 1, limit = 10 } = query;
+    const cacheKey = this.generateUserCacheKey(search, page, limit);
+
+    const cachedData = await this.cacheManager.get(cacheKey);
+    if (cachedData) {
+      return cachedData;
     }
 
-    return this.getCursorBasedPagination(
-      queryBuilder,
-      lastId,
-      lastCreatedAt,
-      limit,
-      totalCount,
-    );
+    const queryBuilder = this.usersRepository.createQueryBuilder('user');
+
+    if (search) {
+      queryBuilder.where('user.name LIKE :search OR user.email LIKE :search', {
+        search: `%${search}%`,
+      });
+    }
+
+    const [users, total] = await queryBuilder
+      .where('user.isActive = :isActive', { isActive: true })
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    const result = {
+      users,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+
+    await this.cacheManager.set(cacheKey, result, 3600000);
+
+    return result;
   }
 
   async markEmailAsConfirmed(email: string) {
@@ -70,83 +115,6 @@ export class UsersService {
         isEmailConfirmed: true,
       },
     );
-  }
-
-  private createBaseQueryBuilder(searchTerm?: string) {
-    const queryBuilder = this.usersRepository.createQueryBuilder('user');
-    if (searchTerm) {
-      queryBuilder.where(
-        '(user.name LIKE :searchTerm OR user.email LIKE :searchTerm)',
-        { searchTerm: `%${searchTerm}%` },
-      );
-    }
-    return queryBuilder;
-  }
-
-  private async getOffsetBasedPagination(
-    queryBuilder: SelectQueryBuilder<User>,
-    offset: number,
-    limit: number,
-    totalCount: number,
-  ) {
-    const results = await queryBuilder
-      .skip(offset)
-      .take(limit)
-      .orderBy('user.createdAt', 'ASC')
-      .addOrderBy('user.id', 'ASC')
-      .getMany();
-
-    return this.paginationResult(results, totalCount, limit, null);
-  }
-
-  private async getCursorBasedPagination(
-    queryBuilder: SelectQueryBuilder<User>,
-    lastId: number,
-    lastCreatedAt: Date,
-    limit: number,
-    totalCount: number,
-  ) {
-    queryBuilder
-      .andWhere(
-        '(user.createdAt > :lastCreatedAt OR (user.createdAt = :lastCreatedAt AND user.id > :lastId))',
-      )
-      .setParameters({ lastCreatedAt, lastId })
-      .orderBy('user.createdAt', 'ASC')
-      .addOrderBy('user.id', 'ASC')
-      .take(limit + 1);
-
-    const results = await queryBuilder.getMany();
-    const hasMore = results.length > limit;
-    if (hasMore) {
-      results.pop();
-    }
-
-    const nextKey = hasMore
-      ? this.getNextKey(results[results.length - 1])
-      : null;
-
-    return this.paginationResult(results, totalCount, limit, nextKey);
-  }
-
-  private getNextKey(lastUser: User) {
-    return {
-      id: lastUser.id,
-      createdAt: lastUser.createdAt,
-    };
-  }
-
-  private paginationResult(
-    results: User[],
-    totalCount: number,
-    limit: number,
-    nextKey: any,
-  ) {
-    return {
-      results,
-      totalCount,
-      totalPages: Math.ceil(totalCount / limit),
-      nextKey,
-    };
   }
 
   async getById(userId: number) {
@@ -209,6 +177,32 @@ export class UsersService {
     await this.usersRepository.update(userId, {
       password: newPassword,
     });
+  }
+
+  async updateUser(userId: number, userData: UpdateUserDto) {
+    await this.usersRepository.update(userId, userData);
+    const updateUser = await this.getById(userId);
+    await this.invalidateUserCache();
+    return updateUser;
+  }
+
+  async deactivateUser(userId: number) {
+    const user = await this.getById(userId);
+
+    user.isActive = false;
+
+    user.password = null;
+    user.currentHashedRefreshToken = null;
+
+    await this.usersRepository.save(user);
+    await this.invalidateUserCache();
+    return user;
+  }
+
+  private async invalidateUserCache(): Promise<void> {
+    const keys = await this.cacheManager.store.keys();
+    const userCacheKeys = keys.filter((key) => key.startsWith('users_'));
+    await Promise.all(userCacheKeys.map((key) => this.cacheManager.del(key)));
   }
 }
 

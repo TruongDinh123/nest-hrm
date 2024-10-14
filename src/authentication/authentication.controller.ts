@@ -63,11 +63,7 @@ export class AuthenticationController {
       refreshTokenCookie,
     ]);
 
-    return {
-      user,
-      accessTokenCookie,
-      refreshTokenCookie,
-    };
+    return user;
   }
 
   @Post('forgot-password')
