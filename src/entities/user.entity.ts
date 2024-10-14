@@ -17,6 +17,9 @@ class User {
   @Column({ unique: true })
   public email: string;
 
+  @Column({ default: false })
+  public isEmailConfirmed: boolean;
+
   @Column()
   public name: string;
 
@@ -30,16 +33,13 @@ class User {
   @Exclude()
   public currentHashedRefreshToken?: string;
 
-  @CreateDateColumn({
-    name: 'created_date',
-    type: 'timestamp without time zone',
-  })
+  @Column({ default: false })
+  public isRegisteredWithGoogle: boolean;
+
+  @CreateDateColumn()
   createdAt: Date;
 
-  @UpdateDateColumn({
-    name: 'modified_date',
-    type: 'timestamp without time zone',
-  })
+  @UpdateDateColumn()
   updatedAt: Date;
 }
 

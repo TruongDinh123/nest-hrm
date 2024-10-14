@@ -9,6 +9,7 @@ import {
   Get,
   ClassSerializerInterceptor,
   UseInterceptors,
+  NotFoundException,
 } from '@nestjs/common';
 import { AuthenticationService } from './authentication.service';
 import { RegisterDto } from './dto/register.dto';
@@ -17,6 +18,9 @@ import RequestWithUser from './requestWithUser.interface';
 import { UsersService } from 'src/user/user.service';
 import JwtAuthenticationGuard from './jwt-authentication.guard';
 import JwtRefreshGuard from './jwt-refresh.guard';
+import { EmailConfirmationService } from 'src/emailConfirmation/emailConfirmation.service';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import * as bcrypt from 'bcrypt';
 
 @Controller('authentication')
 @UseInterceptors(ClassSerializerInterceptor)
@@ -24,11 +28,16 @@ export class AuthenticationController {
   constructor(
     private readonly authenticationService: AuthenticationService,
     private readonly usersService: UsersService,
+    private readonly emailConfirmationService: EmailConfirmationService,
   ) {}
 
   @Post('register')
   async register(@Body() registrationData: RegisterDto) {
-    return this.authenticationService.register(registrationData);
+    const user = await this.authenticationService.register(registrationData);
+    await this.emailConfirmationService.sendVerificationLink(
+      registrationData.email,
+    );
+    return user;
   }
 
   @HttpCode(200)
@@ -37,7 +46,7 @@ export class AuthenticationController {
   async logIn(@Req() request: RequestWithUser) {
     const { user } = request;
 
-    if (!user) {
+    if (!user || !user.isEmailConfirmed) {
       throw new UnauthorizedException();
     }
 
@@ -61,12 +70,37 @@ export class AuthenticationController {
     };
   }
 
-  @UseGuards(JwtRefreshGuard)
+  @Post('forgot-password')
+  async forgotPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    const { email } = resetPasswordDto;
+    const user = await this.usersService.getByEmail(email);
+    if (!user) {
+      throw new NotFoundException('User with this email does not exist');
+    }
+    await this.emailConfirmationService.sendPasswordResetLink(email);
+    return { message: 'Password reset email sent' };
+  }
+
+  @Post('reset-password')
+  async resetPassword(
+    @Body('token') token: string,
+    @Body('newPassword') newPassword: string,
+  ) {
+    const email =
+      await this.emailConfirmationService.decodeConfirmationToken(token);
+
+    const user = await this.usersService.getByEmail(email);
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await this.usersService.updatePassword(user.id, hashedPassword);
+    return { message: 'Password reset successful' };
+  }
+
+  @UseGuards(JwtAuthenticationGuard)
   @Get()
   authenticate(@Req() request: RequestWithUser) {
-    const user = request.user;
-    user.password = undefined;
-    return user;
+    return request.user;
   }
 
   @UseGuards(JwtAuthenticationGuard)
@@ -78,14 +112,15 @@ export class AuthenticationController {
       'Set-Cookie',
       this.authenticationService.getCookiesForLogOut(),
     );
-    return { message: 'Logged out successfully' };
   }
 
   @UseGuards(JwtRefreshGuard)
   @Get('refresh')
-  refresh(@Req() request: RequestWithUser) {
+  async refresh(@Req() request: RequestWithUser) {
     const accessTokenCookie =
-      this.authenticationService.getCookieWithJwtAccessToken(request.user.id);
+      await this.authenticationService.getCookieWithJwtAccessToken(
+        request.user.id,
+      );
 
     request.res.setHeader('Set-Cookie', accessTokenCookie);
     return request.user;

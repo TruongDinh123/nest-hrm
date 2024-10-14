@@ -1,29 +1,28 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import UsersService from './user.service';
-import JwtAuthenticationGuard from 'src/authentication/jwt-authentication.guard';
-import { format } from 'date-fns';
 
 @Controller('users')
 export class UserController {
   constructor(private readonly usersService: UsersService) {}
 
-  @UseGuards(JwtAuthenticationGuard)
   @Get()
   async getAllUsers(
-    @Query('lastId') lastId: string = '0',
-    @Query('lastCreatedAt') lastCreatedAt: string = new Date(0).toISOString(),
-    @Query('limit') limit: string = '20',
+    @Query('lastId') lastId?: number,
+    @Query('lastCreatedAt') lastCreatedAt?: string,
+    @Query('limit') limit = 10,
+    @Query('offset') offset?: number,
+    @Query('searchTerm') searchTerm?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
   ) {
-    console.log('Received request with:', { lastId, lastCreatedAt, limit });
-    const formattedLastCreatedAt = format(
-      new Date(lastCreatedAt),
-      'yyyy-MM-dd HH:mm:ss.SSSSSS',
-    );
-    const users = await this.usersService.getAllUsers(
-      parseInt(lastId, 10),
-      formattedLastCreatedAt,
-      parseInt(limit, 10),
-    );
-    return users;
+    const params = {
+      lastId: lastId ? Number(lastId) : undefined,
+      lastCreatedAt: lastCreatedAt ? new Date(lastCreatedAt) : undefined,
+      limit: Number(limit),
+      offset: offset ? Number(offset) : undefined,
+      searchTerm,
+      sortOrder,
+    };
+
+    return this.usersService.getAllUsers(params);
   }
 }

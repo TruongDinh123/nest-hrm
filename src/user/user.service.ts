@@ -1,11 +1,11 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import User from '../entities/user.entity';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import CreateUserDto from './user.dto';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
-import * as cookie from 'cookie';
+import { GetAllUsersParams } from './pagination.dto';
 
 @Injectable()
 export class UsersService {
@@ -30,51 +30,127 @@ export class UsersService {
     );
   }
 
-  async getAllUsers(lastId: number, lastCreatedAt: string, limit: number) {
-    console.log('Fetching users with:', { lastId, lastCreatedAt, limit });
+  async createWithGoogle(email: string, name: string) {
+    const newUser = await this.usersRepository.create({
+      email,
+      name,
+      isRegisteredWithGoogle: true,
+    });
+    await this.usersRepository.save(newUser);
+    return newUser;
+  }
 
-    const query = this.usersRepository
-      .createQueryBuilder('user')
-      .where('(user.created_date > :lastCreatedAt)', { lastCreatedAt })
-      .orWhere('(user.created_date = :lastCreatedAt AND user.id > :lastId)', {
-        lastCreatedAt,
-        lastId,
-      })
-      .orderBy('user.created_date', 'ASC')
-      .addOrderBy('user.id', 'ASC')
-      .take(limit);
+  async getAllUsers(params: GetAllUsersParams) {
+    const { lastId, lastCreatedAt, limit, offset, searchTerm } = params;
+    const queryBuilder = this.createBaseQueryBuilder(searchTerm);
+    const totalCount = await queryBuilder.getCount();
 
-    console.log('Generated SQL:', query.getSql());
-    console.log('Parameters:', query.getParameters());
-
-    const results = await query.getMany();
-
-    console.log(`Found ${results.length} users`);
-    if (results.length > 0) {
-      console.log('First user:', results[0]);
-      console.log('Last user:', results[results.length - 1]);
+    if (offset !== undefined) {
+      return this.getOffsetBasedPagination(
+        queryBuilder,
+        offset,
+        limit,
+        totalCount,
+      );
     }
 
-    const nextKey =
-      results.length > 0
-        ? {
-            id: results[results.length - 1].id,
-            createdAt: results[results.length - 1].createdAt,
-          }
-        : null;
+    return this.getCursorBasedPagination(
+      queryBuilder,
+      lastId,
+      lastCreatedAt,
+      limit,
+      totalCount,
+    );
+  }
 
+  async markEmailAsConfirmed(email: string) {
+    return this.usersRepository.update(
+      { email },
+      {
+        isEmailConfirmed: true,
+      },
+    );
+  }
+
+  private createBaseQueryBuilder(searchTerm?: string) {
+    const queryBuilder = this.usersRepository.createQueryBuilder('user');
+    if (searchTerm) {
+      queryBuilder.where(
+        '(user.name LIKE :searchTerm OR user.email LIKE :searchTerm)',
+        { searchTerm: `%${searchTerm}%` },
+      );
+    }
+    return queryBuilder;
+  }
+
+  private async getOffsetBasedPagination(
+    queryBuilder: SelectQueryBuilder<User>,
+    offset: number,
+    limit: number,
+    totalCount: number,
+  ) {
+    const results = await queryBuilder
+      .skip(offset)
+      .take(limit)
+      .orderBy('user.createdAt', 'ASC')
+      .addOrderBy('user.id', 'ASC')
+      .getMany();
+
+    return this.paginationResult(results, totalCount, limit, null);
+  }
+
+  private async getCursorBasedPagination(
+    queryBuilder: SelectQueryBuilder<User>,
+    lastId: number,
+    lastCreatedAt: Date,
+    limit: number,
+    totalCount: number,
+  ) {
+    queryBuilder
+      .andWhere(
+        '(user.createdAt > :lastCreatedAt OR (user.createdAt = :lastCreatedAt AND user.id > :lastId))',
+      )
+      .setParameters({ lastCreatedAt, lastId })
+      .orderBy('user.createdAt', 'ASC')
+      .addOrderBy('user.id', 'ASC')
+      .take(limit + 1);
+
+    const results = await queryBuilder.getMany();
+    const hasMore = results.length > limit;
+    if (hasMore) {
+      results.pop();
+    }
+
+    const nextKey = hasMore
+      ? this.getNextKey(results[results.length - 1])
+      : null;
+
+    return this.paginationResult(results, totalCount, limit, nextKey);
+  }
+
+  private getNextKey(lastUser: User) {
+    return {
+      id: lastUser.id,
+      createdAt: lastUser.createdAt,
+    };
+  }
+
+  private paginationResult(
+    results: User[],
+    totalCount: number,
+    limit: number,
+    nextKey: any,
+  ) {
     return {
       results,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit),
       nextKey,
     };
   }
 
   async getById(userId: number) {
-    const user = await this.usersRepository.findOne({
-      where: {
-        id: userId,
-      },
-    });
+    const user = await this.usersRepository.findOneBy({ id: userId });
     if (user) {
       return user;
     }
@@ -111,7 +187,7 @@ export class UsersService {
   }
 
   async removeRefreshToken(userId: number) {
-    return this.usersRepository.update(userId, {
+    return await this.usersRepository.update(userId, {
       currentHashedRefreshToken: null,
     });
   }
@@ -129,32 +205,10 @@ export class UsersService {
     }
   }
 
-  async logOut(user: User) {
-    await this.usersRepository.update(user.id, {
-      currentHashedRefreshToken: null,
+  async updatePassword(userId: number, newPassword: string) {
+    await this.usersRepository.update(userId, {
+      password: newPassword,
     });
-    const accessCookie = cookie.serialize(
-      this.configService.get('ACCESS_COOKIE_NAME'),
-      '',
-      {
-        maxAge: 0,
-        path: '/',
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-      },
-    );
-    const refreshCookie = cookie.serialize(
-      this.configService.get('REFRESH_COOKIE_NAME'),
-      '',
-      {
-        maxAge: 0,
-        path: '/',
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-      },
-    );
-
-    return { refreshCookie, accessCookie };
   }
 }
 

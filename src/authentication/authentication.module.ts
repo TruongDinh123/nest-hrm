@@ -8,9 +8,16 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtRefreshTokenStrategy } from './jwt-refresh-token.strategy';
 import { ConfigModule } from '@nestjs/config';
+import { EmailConfirmationModule } from 'src/emailConfirmation/emailConfirmation.module';
 
 @Module({
-  imports: [UsersModule, PassportModule, ConfigModule, JwtModule.register({})],
+  imports: [
+    UsersModule,
+    PassportModule,
+    ConfigModule,
+    EmailConfirmationModule,
+    JwtModule.register({}),
+  ],
   providers: [
     AuthenticationService,
     LocalStrategy,
@@ -18,5 +25,6 @@ import { ConfigModule } from '@nestjs/config';
     JwtRefreshTokenStrategy,
   ],
   controllers: [AuthenticationController],
+  exports: [AuthenticationService],
 })
 export class AuthenticationModule {}
