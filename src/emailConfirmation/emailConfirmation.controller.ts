@@ -4,9 +4,13 @@ import {
   UseInterceptors,
   Post,
   Body,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { EmailConfirmationService } from './emailConfirmation.service';
 import ConfirmEmailDto from './confirmEmail.dto';
+import JwtAuthenticationGuard from 'src/authentication/jwt-authentication.guard';
+import RequestWithUser from 'src/authentication/requestWithUser.interface';
 
 @Controller('email')
 @UseInterceptors(ClassSerializerInterceptor)
@@ -21,5 +25,11 @@ export class EmailConfirmationController {
       confirmationData.token,
     );
     await this.emailConfirmationService.confirmEmail(email);
+  }
+
+  @Post('resend-confirmation-link')
+  @UseGuards(JwtAuthenticationGuard)
+  async resendConfirmationLink(@Req() request: RequestWithUser) {
+    await this.emailConfirmationService.resendConfirmationLink(request.user.id);
   }
 }

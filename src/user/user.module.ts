@@ -6,11 +6,14 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UserController } from './user.controller';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
+import { JwtModule } from '@nestjs/jwt';
+import { UserRole } from 'src/entities/user-role.entity';
 
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, UserRole]),
+    JwtModule.register({}),
     CacheModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

@@ -16,11 +16,11 @@ import { RegisterDto } from './dto/register.dto';
 import { LocalAuthenticationGuard } from './localAuthentication.guard';
 import RequestWithUser from './requestWithUser.interface';
 import { UsersService } from 'src/user/user.service';
-import JwtAuthenticationGuard from './jwt-authentication.guard';
 import JwtRefreshGuard from './jwt-refresh.guard';
 import { EmailConfirmationService } from 'src/emailConfirmation/emailConfirmation.service';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import * as bcrypt from 'bcrypt';
+import JwtAuthenticationGuard from './jwt-authentication.guard';
 
 @Controller('authentication')
 @UseInterceptors(ClassSerializerInterceptor)
@@ -40,13 +40,13 @@ export class AuthenticationController {
     return user;
   }
 
-  @HttpCode(200)
   @UseGuards(LocalAuthenticationGuard)
+  @HttpCode(200)
   @Post('log-in')
   async logIn(@Req() request: RequestWithUser) {
     const { user } = request;
 
-    if (!user || !user.isEmailConfirmed) {
+    if (!user) {
       throw new UnauthorizedException();
     }
 
@@ -63,7 +63,11 @@ export class AuthenticationController {
       refreshTokenCookie,
     ]);
 
-    return user;
+    return {
+      user,
+      accessTokenCookie,
+      refreshTokenCookie,
+    };
   }
 
   @Post('forgot-password')

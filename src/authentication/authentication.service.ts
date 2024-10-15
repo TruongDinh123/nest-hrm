@@ -6,6 +6,7 @@ import PostgresErrorCode from 'src/database/postgresErrorCodes.enum';
 import TokenPayload from './tokenPayload.interface';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { UserRoles } from 'src/entities/user-role.entity';
 
 @Injectable()
 export class AuthenticationService {
@@ -18,9 +19,12 @@ export class AuthenticationService {
   public async register(registrationData: RegisterDto) {
     const hashedPassword = await bcrypt.hash(registrationData.password, 10);
     try {
+      const userRole = await this.usersService.getRoleByName(UserRoles.USER);
+      console.log('🚀 ~ userRole:', userRole);
       const createdUser = await this.usersService.create({
         ...registrationData,
         password: hashedPassword,
+        roleId: userRole.id,
       });
       createdUser.password = undefined;
       return createdUser;
@@ -69,12 +73,11 @@ export class AuthenticationService {
 
   public getCookieWithJwtAccessToken(userId: number) {
     const payload: TokenPayload = { userId };
-
     const token = this.jwtService.sign(payload, {
       secret: this.configService.get('JWT_ACCESS_TOKEN_SECRET'),
       expiresIn: `${this.configService.get('JWT_ACCESS_TOKEN_EXPIRATION_TIME')}s`,
     });
-    return `Authentication=${token}; HttpOnly: Path=/; Max-Age=${this.configService.get('JWT_ACCESS_TOKEN_EXPIRATION_TIME')}`;
+    return `Authentication=${token}; HttpOnly; Path=/; Max-Age=${this.configService.get('JWT_ACCESS_TOKEN_EXPIRATION_TIME')}`;
   }
 
   public getCookieWithJwtRefreshToken(userId: number) {
@@ -95,6 +98,7 @@ export class AuthenticationService {
   public getCookiesForLogOut() {
     return [
       'Authentication=; HttpOnly; Path=/authentication; Max-Age=0;',
+      'Authentication=; HttpOnly; Path=/; Max-Age=0;',
       'Refresh=; HttpOnly; Path=/; Max-Age=0;',
     ];
   }

@@ -12,6 +12,8 @@ export class RegisterDto {
   @IsNotEmpty()
   @MinLength(7)
   password: string;
+
+  roleId: number;
 }
 
 export default RegisterDto;

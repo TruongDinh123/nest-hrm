@@ -3,18 +3,21 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import User from '../entities/user.entity';
 import { Repository } from 'typeorm';
-import CreateUserDto from './dto/user.dto';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
 import { UpdateUserDto } from './dto/updateUser.dto';
 import { Cache } from 'cache-manager';
 import { GetUsersQueryDto } from './dto/pagination.dto';
+import { UserRole, UserRoles } from 'src/entities/user-role.entity';
+import RegisterDto from 'src/authentication/dto/register.dto';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    @InjectRepository(UserRole)
+    private rolesRepository: Repository<UserRole>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly configService: ConfigService,
   ) {}
@@ -35,6 +38,19 @@ export class UsersService {
     );
   }
 
+  async getRoleByName(roleName: UserRoles) {
+    const role = await this.rolesRepository.findOne({
+      where: { role: roleName },
+    });
+    if (role) {
+      return role;
+    }
+    throw new HttpException(
+      'Role with this name does not exist',
+      HttpStatus.NOT_FOUND,
+    );
+  }
+
   async createWithGoogle(email: string, name: string) {
     const newUser = await this.usersRepository.create({
       email,
@@ -44,23 +60,6 @@ export class UsersService {
     await this.usersRepository.save(newUser);
     return newUser;
   }
-
-  // async getAllUsers() {
-  //   const cacheKey = 'all_users';
-  //   const cachedUsers = await this.cacheManager.get<User[]>(cacheKey);
-
-  //   if (cachedUsers) {
-  //     return cachedUsers;
-  //   }
-
-  //   const users = await this.usersRepository.find({
-  //     select: ['id', 'email', 'name'],
-  //   });
-
-  //   await this.cacheManager.set(cacheKey, users, 3600000);
-
-  //   return users;
-  // }
 
   private generateUserCacheKey(
     search?: string,
@@ -118,7 +117,14 @@ export class UsersService {
   }
 
   async getById(userId: number) {
-    const user = await this.usersRepository.findOneBy({ id: userId });
+    const user = await this.usersRepository.findOne({
+      where: {
+        id: userId,
+        isActive: true,
+      },
+      relations: ['role'],
+    });
+    console.log('🚀 ~ user:', user);
     if (user) {
       return user;
     }
@@ -128,7 +134,7 @@ export class UsersService {
     );
   }
 
-  async create(userData: CreateUserDto) {
+  async create(userData: RegisterDto) {
     const newUser = await this.usersRepository.create(userData);
     await this.usersRepository.save(newUser);
     return newUser;
@@ -186,8 +192,17 @@ export class UsersService {
     return updateUser;
   }
 
-  async deactivateUser(userId: number) {
+  async deactivateUser(userId: number, requestUserId: number) {
+    console.log('🚀 ~ userId:', userId);
+    console.log('🚀 ~ requestUserId:', requestUserId);
     const user = await this.getById(userId);
+
+    if (user.id === requestUserId) {
+      throw new HttpException(
+        'You are not allowed to deactivate yourself',
+        HttpStatus.FORBIDDEN,
+      );
+    }
 
     user.isActive = false;
 

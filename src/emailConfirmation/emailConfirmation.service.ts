@@ -50,6 +50,14 @@ export class EmailConfirmationService {
     });
   }
 
+  public async resendConfirmationLink(userId: number) {
+    const user = await this.usersService.getById(userId);
+    if (user.isEmailConfirmed) {
+      throw new BadRequestException('Email already confirmed');
+    }
+    await this.sendVerificationLink(user.email);
+  }
+
   public async confirmEmail(email: string) {
     const user = await this.usersService.getByEmail(email);
     if (user.isEmailConfirmed) {

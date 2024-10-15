@@ -4,9 +4,12 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { UserRole } from './user-role.entity';
 
 @Entity()
 @Index(['id', 'email'])
@@ -26,6 +29,13 @@ class User {
   @Column({ nullable: true })
   @Exclude()
   public password: string | null;
+
+  @ManyToOne(() => UserRole, { eager: true })
+  @JoinColumn({ name: 'roleId' })
+  public role: UserRole;
+
+  @Column()
+  public roleId: number;
 
   @Column({
     nullable: true,
