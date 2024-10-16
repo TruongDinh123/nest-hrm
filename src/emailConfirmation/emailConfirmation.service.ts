@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import VerificationTokenPayload from './verificationTokenPayload.interface';
@@ -50,12 +56,31 @@ export class EmailConfirmationService {
     });
   }
 
-  public async resendConfirmationLink(userId: number) {
-    const user = await this.usersService.getById(userId);
-    if (user.isEmailConfirmed) {
-      throw new BadRequestException('Email already confirmed');
+  async resendConfirmationLink(emailInput: string | { email: string }) {
+    // Xử lý trường hợp emailInput là object
+    const email =
+      typeof emailInput === 'object' ? emailInput.email : emailInput;
+
+    console.log('🚀 ~ Resending confirmation link for email:', email);
+
+    try {
+      const user = await this.usersService.getByEmail(email);
+
+      if (user.isEmailConfirmed) {
+        throw new BadRequestException('Email already confirmed');
+      }
+
+      await this.sendVerificationLink(email);
+      console.log('🚀 ~ Confirmation link sent successfully');
+    } catch (error) {
+      if (
+        error instanceof HttpException &&
+        error.getStatus() === HttpStatus.NOT_FOUND
+      ) {
+        throw new NotFoundException('User not found');
+      }
+      throw error;
     }
-    await this.sendVerificationLink(user.email);
   }
 
   public async confirmEmail(email: string) {

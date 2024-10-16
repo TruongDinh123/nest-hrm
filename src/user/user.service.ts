@@ -23,12 +23,14 @@ export class UsersService {
   ) {}
 
   async getByEmail(email: string) {
+    console.log('🚀 ~ email:', email);
     const user = await this.usersRepository.findOne({
       where: {
         email: email,
         isActive: true,
       },
     });
+    console.log('🚀 ~ user:', user);
     if (user) {
       return user;
     }
@@ -193,8 +195,6 @@ export class UsersService {
   }
 
   async deactivateUser(userId: number, requestUserId: number) {
-    console.log('🚀 ~ userId:', userId);
-    console.log('🚀 ~ requestUserId:', requestUserId);
     const user = await this.getById(userId);
 
     if (user.id === requestUserId) {
@@ -205,8 +205,6 @@ export class UsersService {
     }
 
     user.isActive = false;
-
-    user.password = null;
     user.currentHashedRefreshToken = null;
 
     await this.usersRepository.save(user);

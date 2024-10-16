@@ -28,8 +28,7 @@ export class EmailConfirmationController {
   }
 
   @Post('resend-confirmation-link')
-  @UseGuards(JwtAuthenticationGuard)
-  async resendConfirmationLink(@Req() request: RequestWithUser) {
-    await this.emailConfirmationService.resendConfirmationLink(request.user.id);
+  async resendConfirmationLink(@Body() email: string) {
+    await this.emailConfirmationService.resendConfirmationLink(email);
   }
 }
