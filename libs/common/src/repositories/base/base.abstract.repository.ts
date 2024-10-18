@@ -1,5 +1,4 @@
-import { HttpStatus } from '@nestjs/common';
-import { GrpcException } from '@app/common/exceptions/rpc-exception';
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { BaseRepositoryInterface } from './base.interface.repository';
 import { DeepPartial, FindOneOptions, Repository } from 'typeorm';
 
@@ -27,7 +26,6 @@ export abstract class BaseRepositoryAbstract<TDocument extends HasId>
 
 */
   async create(data: DeepPartial<TDocument>): Promise<TDocument> {
-    console.log('🚀 ~ ProductRepository create - Input:', data);
     const createdDocument = await this.repository.create(data);
     return await this.save(createdDocument);
   }
@@ -41,23 +39,14 @@ export abstract class BaseRepositoryAbstract<TDocument extends HasId>
     return await this.save(document);
   }
 
-  /*
-    - Lean() được sử dụng để tối ưu hóa truy vấn bằng cách trả về đói tượng js thuần túy thay vì một
-    mongoose document. Điều này sẽ giảm bớt chi phí xử lí và cải thiện hiệu xuất.
-
-    - Nếu bạn không sử dụng lean() thì kết quả trả về sẽ là 1 instance của Mongoose document.
-    Mỗi document này bao gồm cả dữ liệu và method như save(), delete()... Điều này gây ra
-    sự chậm trễ overhead của việc tạo ra instance.
-  -
-  */
   async findOneBy(filterQuery: FindOneOptions<TDocument>): Promise<TDocument> {
     const document = await this.repository.findOneBy(filterQuery.where);
 
     if (!document) {
-      throw new GrpcException({
-        status: HttpStatus.NOT_FOUND,
-        message: 'Document not found with filter query',
-      });
+      throw new HttpException(
+        'Document not found with filter query',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return document;
   }
@@ -79,10 +68,10 @@ export abstract class BaseRepositoryAbstract<TDocument extends HasId>
     });
 
     if (!document) {
-      throw new GrpcException({
-        status: HttpStatus.NOT_FOUND,
-        message: 'Document not found with filter query',
-      });
+      throw new HttpException(
+        'Document not found with filter query',
+        HttpStatus.NOT_FOUND,
+      );
     }
     return await this.repository.save(document);
   }

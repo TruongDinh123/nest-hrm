@@ -3,7 +3,7 @@ import { BaseRepositoryAbstract } from './base/base.abstract.repository';
 import UserEntity from '../entities/user.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UsersRepositoryInterface } from './users.interface';
+import { UsersRepositoryInterface } from '../../../../apps/user/src/interface/users.interface';
 
 @Injectable()
 export class UsersRepository

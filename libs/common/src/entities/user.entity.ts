@@ -1,55 +1,43 @@
+import { Exclude } from 'class-transformer';
 import {
   Column,
+  CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
+  ManyToOne,
   OneToMany,
-  OneToOne,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
-import { Exclude } from 'class-transformer';
-import { Address } from './adress.entity';
-import { PostEntity } from './post.entity';
-import { Product } from './product.entity';
+import { UserRole } from './user-role.entity';
+import { ApiKey } from './key-token.entity';
 
 @Entity()
-class UserEntity {
+@Index(['id', 'email'])
+class User {
   @PrimaryGeneratedColumn()
   public id: number;
 
   @Column({ unique: true })
   public email: string;
 
-  @Column({ nullable: true })
-  firstName: string;
+  @Column({ default: false })
+  public isEmailConfirmed: boolean;
 
-  @Column({ nullable: true })
-  lastName: string;
-
-  @Column({ nullable: true })
-  public phoneNumber?: string;
-
-  @Column({ nullable: true })
+  @Column()
   public name: string;
 
   @Column({ nullable: true })
   @Exclude()
-  public password: string;
+  public password: string | null;
 
-  @OneToOne(() => Address, {
-    eager: true,
-    cascade: true,
-  })
-  @JoinColumn()
-  public address: Address;
+  @ManyToOne(() => UserRole, { eager: true })
+  @JoinColumn({ name: 'roleId' })
+  public role: UserRole;
 
-  @OneToMany(() => Product, (product: Product) => product.account)
-  public products: Product[];
-
-  @OneToMany(() => PostEntity, (post: PostEntity) => post.author)
-  public posts: PostEntity[];
-
-  @Column({ default: false })
-  public isRegisteredWithGoogle: boolean;
+  @Column()
+  public roleId: number;
 
   @Column({
     nullable: true,
@@ -57,20 +45,20 @@ class UserEntity {
   @Exclude()
   public currentHashedRefreshToken?: string;
 
-  @Column({ nullable: true })
-  public twoFactorAuthenticationSecret?: string;
+  @Column({ default: true })
+  public isActive: boolean;
 
   @Column({ default: false })
-  public isTwoFactorAuthenticationEnabled: boolean;
+  public isRegisteredWithGoogle: boolean;
 
-  @Column({ nullable: true })
-  public monthlySubscriptionStatus?: string;
+  @OneToMany(() => ApiKey, (apiKey) => apiKey.user)
+  public apiKeys: ApiKey[];
 
-  @Column({ default: false })
-  public isEmailConfirmed: boolean;
+  @CreateDateColumn()
+  createdAt: Date;
 
-  @Column({ default: false })
-  public isPhoneNumberConfirmed: boolean;
+  @UpdateDateColumn()
+  updatedAt: Date;
 }
 
-export default UserEntity;
+export default User;

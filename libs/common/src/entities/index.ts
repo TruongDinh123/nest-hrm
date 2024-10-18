@@ -1,4 +1,3 @@
 export * from './user.entity';
-export * from './post.entity';
-export * from './adress.entity';
-export * from './category.entity';
+export * from './key-token.entity';
+export * from './user-role.entity';
