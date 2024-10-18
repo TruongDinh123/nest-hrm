@@ -6,6 +6,9 @@ import { AuthenticationModule } from './authentication/authentication.module';
 import { UsersModule } from './user/user.module';
 import { EmailConfirmationModule } from './emailConfirmation/emailConfirmation.module';
 import { GoogleAuthenticationModule } from './googleAuthentication/googleAuthentication.module';
+import { APP_GUARD } from '@nestjs/core';
+import { ApiKeyGuard } from './authentication/api-key.guard';
+import { ApiKeyModule } from './authentication/api-key/api-key.module';
 
 @Module({
   imports: [
@@ -49,11 +52,12 @@ import { GoogleAuthenticationModule } from './googleAuthentication/googleAuthent
     }),
     DatabaseModule,
     AuthenticationModule,
+    ApiKeyModule,
     GoogleAuthenticationModule,
     EmailConfirmationModule,
     UsersModule,
   ],
   controllers: [],
-  providers: [ConfigService],
+  providers: [ConfigService, { provide: APP_GUARD, useClass: ApiKeyGuard }],
 })
 export class AppModule {}

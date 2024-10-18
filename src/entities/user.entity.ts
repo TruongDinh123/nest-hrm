@@ -6,10 +6,12 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { UserRole } from './user-role.entity';
+import { ApiKey } from './key-token.entity';
 
 @Entity()
 @Index(['id', 'email'])
@@ -48,6 +50,9 @@ class User {
 
   @Column({ default: false })
   public isRegisteredWithGoogle: boolean;
+
+  @OneToMany(() => ApiKey, (apiKey) => apiKey.user)
+  public apiKeys: ApiKey[];
 
   @CreateDateColumn()
   createdAt: Date;

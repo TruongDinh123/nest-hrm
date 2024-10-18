@@ -4,23 +4,25 @@ import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
 import PostgresErrorCode from 'src/database/postgresErrorCodes.enum';
 import TokenPayload from './tokenPayload.interface';
-import { JwtService } from '@nestjs/jwt';
+// import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { UserRoles } from 'src/entities/user-role.entity';
+import { ApiKeyService } from './api-key/api-key.service';
+import User from 'src/entities/user.entity';
 
 @Injectable()
 export class AuthenticationService {
   constructor(
     private readonly usersService: UsersService,
-    private readonly jwtService: JwtService,
+    // private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly apiKeyService: ApiKeyService,
   ) {}
 
   public async register(registrationData: RegisterDto) {
     const hashedPassword = await bcrypt.hash(registrationData.password, 10);
     try {
       const userRole = await this.usersService.getRoleByName(UserRoles.USER);
-      console.log('🚀 ~ userRole:', userRole);
       const createdUser = await this.usersService.create({
         ...registrationData,
         password: hashedPassword,
@@ -40,6 +42,19 @@ export class AuthenticationService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  async login(user: User) {
+    let apiKey = await this.apiKeyService.getValidApiKeyForUser(user.id);
+    if (!apiKey) {
+      apiKey = await this.apiKeyService.createApiKey(user);
+    }
+    const cookie = this.createApiKeyCookie(apiKey);
+    return { cookie, user };
+  }
+
+  private createApiKeyCookie(apiKey: string) {
+    return `ApiKey=${apiKey}; HttpOnly; Path=/; Max-Age=${30 * 24 * 60 * 60}`;
   }
 
   public async getAuthenticatedUser(email: string, plainTextPassword: string) {
@@ -71,35 +86,37 @@ export class AuthenticationService {
     }
   }
 
-  public getCookieWithJwtAccessToken(userId: number) {
-    const payload: TokenPayload = { userId };
-    const token = this.jwtService.sign(payload, {
-      secret: this.configService.get('JWT_ACCESS_TOKEN_SECRET'),
-      expiresIn: `${this.configService.get('JWT_ACCESS_TOKEN_EXPIRATION_TIME')}s`,
-    });
-    return `Authentication=${token}; HttpOnly; Path=/; Max-Age=${this.configService.get('JWT_ACCESS_TOKEN_EXPIRATION_TIME')}`;
-  }
+  // public getCookieWithJwtAccessToken(userId: number) {
+  //   const payload: TokenPayload = { userId };
+  //   const token = this.jwtService.sign(payload, {
+  //     secret: this.configService.get('JWT_ACCESS_TOKEN_SECRET'),
+  //     expiresIn: `${this.configService.get('JWT_ACCESS_TOKEN_EXPIRATION_TIME')}s`,
+  //   });
+  //   console.log('🚀 ~ token:', token);
+  //   return `Authentication=${token}; HttpOnly; Path=/; Max-Age=${this.configService.get('JWT_ACCESS_TOKEN_EXPIRATION_TIME')}`;
+  // }
 
-  public getCookieWithJwtRefreshToken(userId: number) {
-    const payload: TokenPayload = { userId };
-    const token = this.jwtService.sign(payload, {
-      secret: this.configService.get('JWT_REFRESH_TOKEN_SECRET'),
-      expiresIn: `${this.configService.get('JWT_REFRESH_TOKEN_EXPIRATION_TIME')}s`,
-    });
-    const cookie = `Refresh=${token}; HttpOnly; Path=/; Max-Age=${this.configService.get(
-      'JWT_REFRESH_TOKEN_EXPIRATION_TIME',
-    )}`;
-    return {
-      cookie,
-      token,
-    };
+  // public getCookieWithJwtRefreshToken(userId: number) {
+  //   const payload: TokenPayload = { userId };
+  //   const token = this.jwtService.sign(payload, {
+  //     secret: this.configService.get('JWT_REFRESH_TOKEN_SECRET'),
+  //     expiresIn: `${this.configService.get('JWT_REFRESH_TOKEN_EXPIRATION_TIME')}s`,
+  //   });
+  //   const cookie = `Refresh=${token}; HttpOnly; Path=/; Max-Age=${this.configService.get(
+  //     'JWT_REFRESH_TOKEN_EXPIRATION_TIME',
+  //   )}`;
+  //   return {
+  //     cookie,
+  //     token,
+  //   };
+  // }
+
+  public async logout(apiKey: string) {
+    await this.apiKeyService.deactivateApiKey(apiKey);
+    return this.getCookiesForLogOut();
   }
 
   public getCookiesForLogOut() {
-    return [
-      'Authentication=; HttpOnly; Path=/authentication; Max-Age=0;',
-      'Authentication=; HttpOnly; Path=/; Max-Age=0;',
-      'Refresh=; HttpOnly; Path=/; Max-Age=0;',
-    ];
+    return ['ApiKey=; HttpOnly; Path=/; Max-Age=0;'];
   }
 }

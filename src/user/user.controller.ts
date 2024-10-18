@@ -9,7 +9,6 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import JwtAuthenticationGuard from 'src/authentication/jwt-authentication.guard';
 import UsersService from './user.service';
 import { UpdateUserDto } from './dto/updateUser.dto';
 import { GetUsersQueryDto } from './dto/pagination.dto';
@@ -24,13 +23,11 @@ export class UserController {
 
   @Roles(UserRoles.USER, UserRoles.ADMIN, UserRoles.OWNER)
   @UseGuards(RolesGuard)
-  @UseGuards(JwtAuthenticationGuard)
   @Get()
   async getAllUsers(@Query() query: GetUsersQueryDto) {
     return this.usersService.getAllUsers(query);
   }
 
-  @UseGuards(JwtAuthenticationGuard)
   @Patch(':id')
   async updateUser(@Param('id') id: number, @Body() userData: UpdateUserDto) {
     return this.usersService.updateUser(id, userData);
@@ -39,7 +36,6 @@ export class UserController {
   @Delete(':id')
   @Roles(UserRoles.ADMIN, UserRoles.OWNER)
   @UseGuards(RolesGuard)
-  @UseGuards(JwtAuthenticationGuard)
   async deactivateUser(@Param('id') id: number, @Req() req: RequestWithUser) {
     return this.usersService.deactivateUser(id, req.user.id);
   }

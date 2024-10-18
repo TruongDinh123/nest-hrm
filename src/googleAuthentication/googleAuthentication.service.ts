@@ -4,6 +4,7 @@ import { google, Auth } from 'googleapis';
 import { AuthenticationService } from '../authentication/authentication.service';
 import User from 'src/entities/user.entity';
 import UsersService from 'src/user/user.service';
+import { UserRoles } from 'src/entities/user-role.entity';
 
 @Injectable()
 export class GoogleAuthenticationService {
@@ -38,10 +39,16 @@ export class GoogleAuthenticationService {
   }
 
   async registerUser(token: string, email: string) {
+    const userRole = await this.usersService.getRoleByName(UserRoles.USER);
+
     const userData = await this.getUserData(token);
     const name = userData.name;
 
-    const user = await this.usersService.createWithGoogle(email, name);
+    const user = await this.usersService.createWithGoogle(
+      email,
+      name,
+      userRole.id,
+    );
 
     return this.handleRegisteredUser(user);
   }
@@ -61,31 +68,27 @@ export class GoogleAuthenticationService {
   }
 
   async getCookiesForUser(user: User) {
-    const accessTokenCookie =
-      this.authenticationService.getCookieWithJwtAccessToken(user.id);
-    const { cookie: refreshTokenCookie, token: refreshToken } =
-      this.authenticationService.getCookieWithJwtRefreshToken(user.id);
-
-    await this.usersService.setCurrentRefreshToken(refreshToken, user.id);
-
-    return {
-      accessTokenCookie,
-      refreshTokenCookie,
-    };
+    // const accessTokenCookie =
+    //   this.authenticationService.getCookieWithJwtAccessToken(user.id);
+    // const { cookie: refreshTokenCookie, token: refreshToken } =
+    //   this.authenticationService.getCookieWithJwtRefreshToken(user.id);
+    // await this.usersService.setCurrentRefreshToken(refreshToken, user.id);
+    // return {
+    //   accessTokenCookie,
+    //   refreshTokenCookie,
+    // };
   }
 
   async handleRegisteredUser(user: User) {
-    if (!user.isRegisteredWithGoogle) {
-      throw new UnauthorizedException();
-    }
-
-    const { accessTokenCookie, refreshTokenCookie } =
-      await this.getCookiesForUser(user);
-
-    return {
-      accessTokenCookie,
-      refreshTokenCookie,
-      user,
-    };
+    // if (!user.isRegisteredWithGoogle) {
+    //   throw new UnauthorizedException();
+    // }
+    // const { accessTokenCookie, refreshTokenCookie } =
+    //   await this.getCookiesForUser(user);
+    // return {
+    //   accessTokenCookie,
+    //   refreshTokenCookie,
+    //   user,
+    // };
   }
 }

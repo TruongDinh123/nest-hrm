@@ -17,19 +17,19 @@ export class GoogleAuthenticationController {
     private readonly googleAuthenticationService: GoogleAuthenticationService,
   ) {}
 
-  @Post()
-  async authenticate(
-    @Body() tokenData: TokenVerificationDto,
-    @Req() request: Request,
-  ) {
-    const { accessTokenCookie, refreshTokenCookie, user } =
-      await this.googleAuthenticationService.authenticate(tokenData.token);
+  // @Post()
+  // async authenticate(
+  //   @Body() tokenData: TokenVerificationDto,
+  //   @Req() request: Request,
+  // ) {
+  //   const { accessTokenCookie, refreshTokenCookie, user } =
+  //     await this.googleAuthenticationService.authenticate(tokenData.token);
 
-    request.res.setHeader('Set-Cookie', [
-      accessTokenCookie,
-      refreshTokenCookie,
-    ]);
+  //   request.res.setHeader('Set-Cookie', [
+  //     accessTokenCookie,
+  //     refreshTokenCookie,
+  //   ]);
 
-    return user;
-  }
+  //   return user;
+  // }
 }

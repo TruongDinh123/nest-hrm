@@ -23,14 +23,12 @@ export class UsersService {
   ) {}
 
   async getByEmail(email: string) {
-    console.log('🚀 ~ email:', email);
     const user = await this.usersRepository.findOne({
       where: {
         email: email,
         isActive: true,
       },
     });
-    console.log('🚀 ~ user:', user);
     if (user) {
       return user;
     }
@@ -53,58 +51,52 @@ export class UsersService {
     );
   }
 
-  async createWithGoogle(email: string, name: string) {
+  async createWithGoogle(email: string, name: string, roleId: number) {
     const newUser = await this.usersRepository.create({
       email,
       name,
       isRegisteredWithGoogle: true,
+      roleId: roleId,
     });
     await this.usersRepository.save(newUser);
     return newUser;
   }
 
-  private generateUserCacheKey(
-    search?: string,
-    page?: number,
-    limit?: number,
-  ): string {
-    return `users_${search || 'all'}_${page || 1}_${limit || 10}`;
-  }
-
   async getAllUsers(query: GetUsersQueryDto) {
     const { search, page = 1, limit = 10 } = query;
-    const cacheKey = this.generateUserCacheKey(search, page, limit);
 
-    const cachedData = await this.cacheManager.get(cacheKey);
-    if (cachedData) {
-      return cachedData;
-    }
+    const allUsers = await this.usersRepository.find({
+      where: { isActive: true },
+      select: ['id', 'name', 'email'],
+      relations: ['role'],
+    });
 
-    const queryBuilder = this.usersRepository.createQueryBuilder('user');
+    let filteredUsers = allUsers;
 
     if (search) {
-      queryBuilder.where('user.name LIKE :search OR user.email LIKE :search', {
-        search: `%${search}%`,
-      });
+      const searchLower = search.toLowerCase();
+      filteredUsers = allUsers.filter(
+        (user) =>
+          user.name.toLowerCase().includes(searchLower) ||
+          user.email.toLowerCase().includes(searchLower) ||
+          user.role?.role.toLowerCase().includes(searchLower),
+      );
     }
 
-    const [users, total] = await queryBuilder
-      .where('user.isActive = :isActive', { isActive: true })
-      .skip((page - 1) * limit)
-      .take(limit)
-      .getManyAndCount();
+    const total = filteredUsers.length;
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
 
     const result = {
-      users,
+      users: paginatedUsers,
       meta: {
         total,
-        page,
-        limit,
+        page: Number(page),
+        limit: Number(limit),
         totalPages: Math.ceil(total / limit),
       },
     };
-
-    await this.cacheManager.set(cacheKey, result, 3600000);
 
     return result;
   }
@@ -124,9 +116,9 @@ export class UsersService {
         id: userId,
         isActive: true,
       },
+      select: ['id', 'name', 'email'],
       relations: ['role'],
     });
-    console.log('🚀 ~ user:', user);
     if (user) {
       return user;
     }
@@ -190,7 +182,6 @@ export class UsersService {
   async updateUser(userId: number, userData: UpdateUserDto) {
     await this.usersRepository.update(userId, userData);
     const updateUser = await this.getById(userId);
-    await this.invalidateUserCache();
     return updateUser;
   }
 
@@ -208,14 +199,7 @@ export class UsersService {
     user.currentHashedRefreshToken = null;
 
     await this.usersRepository.save(user);
-    await this.invalidateUserCache();
     return user;
-  }
-
-  private async invalidateUserCache(): Promise<void> {
-    const keys = await this.cacheManager.store.keys();
-    const userCacheKeys = keys.filter((key) => key.startsWith('users_'));
-    await Promise.all(userCacheKeys.map((key) => this.cacheManager.del(key)));
   }
 }
 
